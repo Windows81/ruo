@@ -92,10 +92,10 @@ class Client:
             raise ValueError("Code is null")
 
     def generate_signature(self, method, path, time, data):
-        message = (time + "\n" + method + "\n" + self.host.lower() + "\n" + path + '\n' + urllib.parse.urlencode(data)).encode('ascii')
+        message = (time + "\n" + method + "\n" + self.host.lower() + "\n" + path + '\n' + urllib.parse.urlencode(data))
         print(message)
 
-        h = SHA512.new(message)
+        h = SHA512.new(message.encode('ascii'))
         signature = pkcs1_15.new(self.pubkey).sign(h)
         auth = ("Basic "+base64.b64encode((self.pkey + ":"+base64.b64encode(signature).decode('ascii')).encode('ascii')).decode('ascii'))
         return auth
