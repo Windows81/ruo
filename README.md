@@ -1,3 +1,11 @@
+---
+title: GET ME LOGGED INTO DUO!
+emoji: ÒÓ
+sdk: streamlit
+app_file: main.py
+pinned: false
+---
+
 # ruo
 Bypass Duo Push
 
