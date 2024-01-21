@@ -1,19 +1,17 @@
+import time
+import pathlib
+import threading
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA512
-
 
 import urllib.parse
 import io
 import base64
 import datetime
 import email.utils
-import json
-
-import threading
-import pathlib
-import time
 import requests
+import json
 
 
 class Client:
@@ -86,8 +84,14 @@ class Client:
 
     def activate(self):
         if self.code:
-            d = {"pubkey": self.pubkey.publickey().export_key("PEM").decode('ascii'), "pkpush": "rsa-sha512"}
-            r = requests.post(f"https://{self.host}/push/v2/activation/{self.code}?customer_protocol=1", data=d)
+            # set up URL parameters
+            # taken from https://github.com/FreshSupaSulley/DuOSU
+            params = {"customer_protocol": "1", "pubkey": self.pubkey.publickey().export_key("PEM").decode('ascii'), "pkpush": "rsa-sha512", "jailbroken": "false", "architecture": "arm64", "region": "US", "app_id": "com.duosecurity.duomobile", "full_disk_encryption": "true",
+                      "passcode_status": "true", "platform": "Android", "app_version": "3.49.0", "app_build_number": "323001", "version": "11", "manufacturer": "unknown", "language": "en", "model": "Browser Extension", "security_patch_level": "2021-02-01"}
+            # send activation request
+            r = requests.post(
+                f"https://{self.host}/push/v2/activation/{self.code}", params=params)
+            # print(r.request.url)
 
             response = r.json()
             self.import_response(response)
@@ -95,22 +99,26 @@ class Client:
             raise ValueError("Code is null")
 
     def generate_signature(self, method, path, time, data):
-        message = (time + "\n" + method + "\n" + self.host.lower() + "\n" + path + '\n' + urllib.parse.urlencode(data))
+        message = (time + "\n" + method + "\n" + self.host.lower() + "\n" +
+                   path + '\n' + urllib.parse.urlencode(data)).encode('ascii')
         print(message)
 
-        h = SHA512.new(message.encode('ascii'))
+        h = SHA512.new(message)
         signature = pkcs1_15.new(self.pubkey).sign(h)
-        auth = ("Basic " + base64.b64encode((self.pkey + ":" + base64.b64encode(signature).decode('ascii')).encode('ascii')).decode('ascii'))
+        auth = ("Basic " + base64.b64encode((self.pkey + ":" +
+                base64.b64encode(signature).decode('ascii')).encode('ascii')).decode('ascii'))
         return auth
 
     def get_transactions(self):
         dt = datetime.datetime.utcnow()
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/transactions"
-        data = {"akey": self.akey, "fips_status": "1", "hsm_status": "true", "pkpush": "rsa-sha512"}
+        data = {"akey": self.akey, "fips_status": "1",
+                "hsm_status": "true", "pkpush": "rsa-sha512"}
 
         signature = self.generate_signature("GET", path, time, data)
-        r = requests.get(f"https://{self.host}{path}", params=data, headers={"Authorization": signature, "x-duo-date": time, "host": self.host})
+        r = requests.get(f"https://{self.host}{path}", params=data, headers={
+                         "Authorization": signature, "x-duo-date": time, "host": self.host})
 
         return r.json()
 
@@ -118,15 +126,43 @@ class Client:
         dt = datetime.datetime.utcnow()
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/transactions/" + transactionid
-        data = {"akey": self.akey, "answer": answer, "fips_status": "1", "hsm_status": "true", "pkpush": "rsa-sha512"}
+        data = {"akey": self.akey, "answer": answer, "fips_status": "1",
+                "hsm_status": "true", "pkpush": "rsa-sha512"}
 
         # if answer == "approve":
         #     data["touch_id"] = False
         # data["push_received"] = True
         # data["pull_to_refresh_used"] = True
         signature = self.generate_signature("POST", path, time, data)
-        r = requests.post(f"https://{self.host}{path}", data=data, headers={"Authorization": signature, "x-duo-date": time, "host": self.host, "txId": transactionid})
+        r = requests.post(f"https://{self.host}{path}", data=data, headers={
+                          "Authorization": signature, "x-duo-date": time, "host": self.host, "txId": transactionid})
 
+        return r.json()
+
+    def register(self, token):
+        dt = datetime.datetime.utcnow()
+        time = email.utils.format_datetime(dt)
+        path = "/push/v2/device/registration"
+        data = {"akey": self.akey, "token": token}
+
+        # if answer == "approve":
+        #     data["touch_id"] = False
+        # data["push_received"] = True
+        # data["pull_to_refresh_used"] = True
+        signature = self.generate_signature("POST", path, time, data)
+        r = requests.post(f"https://{self.host}{path}", data=data, headers={
+                          "Authorization": signature, "x-duo-date": time, "host": self.host})
+
+    def device_info(self):
+        dt = datetime.datetime.utcnow()
+        time = email.utils.format_datetime(dt)
+        path = "/push/v2/device/info"
+        data = {"akey": self.akey, "fips_status": "1",
+                "hsm_status": "true", "pkpush": "rsa-sha512"}
+
+        signature = self.generate_signature("GET", path, time, data)
+        r = requests.get(f"https://{self.host}{path}", params=data, headers={
+                         "Authorization": signature, "x-duo-date": time, "host": self.host})
         return r.json()
 
 
