@@ -110,7 +110,7 @@ class Client:
         return auth
 
     def get_transactions(self):
-        dt = datetime.datetime.utcnow()
+        dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/transactions"
         data = {"akey": self.akey, "fips_status": "1",
@@ -123,7 +123,7 @@ class Client:
         return r.json()
 
     def reply_transaction(self, transactionid, answer):
-        dt = datetime.datetime.utcnow()
+        dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/transactions/" + transactionid
         data = {"akey": self.akey, "answer": answer, "fips_status": "1",
@@ -140,7 +140,7 @@ class Client:
         return r.json()
 
     def register(self, token):
-        dt = datetime.datetime.utcnow()
+        dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/registration"
         data = {"akey": self.akey, "token": token}
@@ -154,7 +154,7 @@ class Client:
                           "Authorization": signature, "x-duo-date": time, "host": self.host})
 
     def device_info(self):
-        dt = datetime.datetime.utcnow()
+        dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/info"
         data = {"akey": self.akey, "fips_status": "1",

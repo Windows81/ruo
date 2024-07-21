@@ -1,4 +1,4 @@
-#key.pem
+*.pem
 #response.json
 trash
 trash/*
