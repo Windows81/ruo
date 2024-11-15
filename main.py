@@ -15,7 +15,7 @@ import json
 
 
 class Client:
-    def __init__(self, akey=None, pkey=None, host=None, code=None, response=None, keyfile=None):
+    def __init__(self, akey=None, pkey=None, host=None, code=None, response=None, keyfile=None) -> None:
         if keyfile:
             self.import_key(keyfile)
         else:
@@ -31,13 +31,13 @@ class Client:
         if response:
             self.import_response(response)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
     def __repr__(self) -> str:
         return "Client(" + ",".join([(self.__dict__[i] or '') and (i + '=' + self.__dict__[i]) for i in ["akey", "pkey", "host"]]) + ")"
 
-    def import_key(self, keyfile):
+    def import_key(self, keyfile) -> None:
         if issubclass(type(keyfile), io.IOBase):
             self.pubkey = RSA.import_key(keyfile.read())
         else:
@@ -47,14 +47,14 @@ class Client:
                 with open(keyfile, "rb") as f:
                     self.pubkey = RSA.import_key(f.read())
 
-    def export_key(self, file):
+    def export_key(self, file) -> None:
         if type(file) is str:
             with open(file, "wb") as f:
                 f.write(self.pubkey.export_key("PEM"))
         else:
             file.write(self.pubkey.export_key("PEM"))
 
-    def read_code(self, code):
+    def read_code(self, code) -> None:
         code, host = map(lambda x: x.strip("<>"), code.split("-"))
         missing_padding = len(host) % 4
         if missing_padding:
@@ -62,7 +62,7 @@ class Client:
         self.code = code
         self.host = base64.decodebytes(host.encode("ascii")).decode('ascii')
 
-    def import_response(self, response):
+    def import_response(self, response) -> None:
         if type(response) is str:
             with open(response, "r") as f:
                 response = json.load(f)
@@ -76,18 +76,33 @@ class Client:
         self.akey = response["akey"]
         self.pkey = response["pkey"]
 
-    def export_response(self):
+    def export_response(self) -> None:
         if self.host and ("host" not in self.info or not self.info["host"]):
             self.info["host"] = self.host
         with open("response.json", 'w') as f:
             json.dump(self.info, f)
 
-    def activate(self):
+    def activate(self) -> None:
         if self.code:
             # set up URL parameters
             # taken from https://github.com/FreshSupaSulley/DuOSU
-            params = {"customer_protocol": "1", "pubkey": self.pubkey.publickey().export_key("PEM").decode('ascii'), "pkpush": "rsa-sha512", "jailbroken": "false", "architecture": "arm64", "region": "US", "app_id": "com.duosecurity.duomobile", "full_disk_encryption": "true",
-                      "passcode_status": "true", "platform": "Android", "app_version": "3.49.0", "app_build_number": "323001", "version": "11", "manufacturer": "unknown", "language": "en", "model": "Browser Extension", "security_patch_level": "2021-02-01"}
+            params = {
+                "customer_protocol": "1",
+                "pubkey": self.pubkey.publickey().export_key("PEM").decode('ascii'),
+                "pkpush": "rsa-sha512",
+                "jailbroken": "false",
+                "architecture": "arm64",
+                "region": "US",
+                "app_id": "com.duosecurity.duomobile",
+                "full_disk_encryption": True,
+                "passcode_status": True,
+                "app_version": "4.59.0",
+                "app_build_number": "459010",
+                "version": "13",
+                "manufacturer": "unknown",
+                "language": "en",
+                "security_patch_level": "2022-11-05"
+            }
             # send activation request
             r = requests.post(
                 f"https://{self.host}/push/v2/activation/{self.code}", params=params)
@@ -99,9 +114,11 @@ class Client:
             raise ValueError("Code is null")
 
     def generate_signature(self, method, path, time, data):
+        assert isinstance(self.host, str)
+        assert isinstance(self.pkey, str)
         message = (time + "\n" + method + "\n" + self.host.lower() + "\n" +
                    path + '\n' + urllib.parse.urlencode(data)).encode('ascii')
-        print(message)
+        print(message.decode('utf-8'))
 
         h = SHA512.new(message)
         signature = pkcs1_15.new(self.pubkey).sign(h)
@@ -109,16 +126,26 @@ class Client:
                 base64.b64encode(signature).decode('ascii')).encode('ascii')).decode('ascii'))
         return auth
 
-    def get_transactions(self):
+    def get_transactions(self) -> dict:
         dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/transactions"
-        data = {"akey": self.akey, "fips_status": "1",
-                "hsm_status": "true", "pkpush": "rsa-sha512"}
+        data = {
+            "akey": self.akey,
+            "fips_status": "1",
+            "hsm_status": "true",
+            "pkpush": "rsa-sha512",
+        }
 
         signature = self.generate_signature("GET", path, time, data)
-        r = requests.get(f"https://{self.host}{path}", params=data, headers={
-                         "Authorization": signature, "x-duo-date": time, "host": self.host})
+        r = requests.get(
+            f"https://{self.host}{path}",
+            params=data, headers={
+                "Authorization": signature,
+                "x-duo-date": time,
+                "host": self.host,
+            }
+        )
 
         return r.json()
 
@@ -134,12 +161,19 @@ class Client:
         # data["push_received"] = True
         # data["pull_to_refresh_used"] = True
         signature = self.generate_signature("POST", path, time, data)
-        r = requests.post(f"https://{self.host}{path}", data=data, headers={
-                          "Authorization": signature, "x-duo-date": time, "host": self.host, "txId": transactionid})
+        r = requests.post(
+            f"https://{self.host}{path}",
+            data=data, headers={
+                "Authorization": signature,
+                "x-duo-date": time,
+                "host": self.host,
+                "txId": transactionid,
+            }
+        )
 
         return r.json()
 
-    def register(self, token):
+    def register(self, token) -> dict:
         dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/registration"
@@ -150,41 +184,68 @@ class Client:
         # data["push_received"] = True
         # data["pull_to_refresh_used"] = True
         signature = self.generate_signature("POST", path, time, data)
-        r = requests.post(f"https://{self.host}{path}", data=data, headers={
-                          "Authorization": signature, "x-duo-date": time, "host": self.host})
+        r = requests.post(
+            f"https://{self.host}{path}",
+            data=data,
+            headers={
+                "Authorization": signature,
+                "x-duo-date": time,
+                "host": self.host,
+            }
+        )
+        return r.json()
 
-    def device_info(self):
+    def device_info(self) -> dict:
         dt = datetime.datetime.now(datetime.UTC)
         time = email.utils.format_datetime(dt)
         path = "/push/v2/device/info"
-        data = {"akey": self.akey, "fips_status": "1",
-                "hsm_status": "true", "pkpush": "rsa-sha512"}
+        data = {
+            "akey": self.akey,
+            "fips_status": "1",
+            "hsm_status": "true",
+            "pkpush": "rsa-sha512"
+        }
 
         signature = self.generate_signature("GET", path, time, data)
-        r = requests.get(f"https://{self.host}{path}", params=data, headers={
-                         "Authorization": signature, "x-duo-date": time, "host": self.host})
+        r = requests.post(
+            f"https://{self.host}{path}",
+            params=data,
+            headers={
+                "Authorization": signature,
+                "x-duo-date": time,
+                "host": self.host,
+            }
+        )
         return r.json()
 
 
-def loop(c):
-    while True:
-        try:
-            r = c.get_transactions()
-        except requests.exceptions.ConnectionError:
-            print("Connection Error")
-            time.sleep(5)
-            continue
+def loop_each(c: Client) -> None:
+    try:
+        r = c.get_transactions()
+    except requests.exceptions.ConnectionError:
+        print("Connection Error")
+        time.sleep(5)
+        return
 
-        t = r["response"]["transactions"]
-        print("Checking for transactions")
-        if len(t):
-            for tx in t:
-                print(tx)
-                c.reply_transaction(tx["urgid"], 'approve')
-                time.sleep(2)
-        else:
-            print("No transactions")
-        time.sleep(10)
+    if r["stat"] == "FAIL":
+        print(r)
+        return
+
+    t = r["response"]["transactions"]
+    print("Checking for transactions")
+    if len(t):
+        for tx in t:
+            print(tx)
+            c.reply_transaction(tx["urgid"], 'approve')
+            time.sleep(2)
+    else:
+        print("No transactions")
+    time.sleep(10)
+
+
+def loop(*a, **kwa):
+    while True:
+        loop_each(*a, **kwa)
 
 # c = Client(response="response.json",keyfile="mykey.pem",code="")
 # print(c)
