@@ -6,12 +6,12 @@ from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA512
 
 import urllib.parse
-import io
 import base64
 import datetime
 import email.utils
 import requests
 import json
+import io
 
 
 class Client:
@@ -86,22 +86,24 @@ class Client:
         if self.code:
             # set up URL parameters
             # taken from https://github.com/FreshSupaSulley/DuOSU
+            pubkey = self.pubkey.publickey().export_key("PEM").decode('ascii')
             params = {
-                "customer_protocol": "1",
-                "pubkey": self.pubkey.publickey().export_key("PEM").decode('ascii'),
-                "pkpush": "rsa-sha512",
-                "jailbroken": "false",
-                "architecture": "arm64",
+                "jailbroken": False,
+                "architecture": "arch64",
                 "region": "US",
                 "app_id": "com.duosecurity.duomobile",
                 "full_disk_encryption": True,
                 "passcode_status": True,
+                "platform": "Android",
                 "app_version": "4.59.0",
                 "app_build_number": "459010",
                 "version": "13",
                 "manufacturer": "unknown",
                 "language": "en",
-                "security_patch_level": "2022-11-05"
+                "model": "Extension",
+                "security_patch_level": "2023-08-05",
+                "pkpush": "rsa-sha512",
+                "pubkey": pubkey,
             }
             # send activation request
             r = requests.post(
@@ -122,9 +124,10 @@ class Client:
 
         h = SHA512.new(message)
         signature = pkcs1_15.new(self.pubkey).sign(h)
-        auth = ("Basic " + base64.b64encode((self.pkey + ":" +
-                base64.b64encode(signature).decode('ascii')).encode('ascii')).decode('ascii'))
-        return auth
+        signature_b64 = base64.b64encode(signature).decode('ascii')
+        sig_pair_b64 = self.pkey + ":" + signature_b64
+        auth = b"Basic "+base64.b64encode(sig_pair_b64.encode('ascii'))
+        return auth.decode('ascii')
 
     def get_transactions(self) -> dict:
         dt = datetime.datetime.now(datetime.UTC)
